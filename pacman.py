@@ -2,6 +2,8 @@ import pyxel
 import random
 
 TILE_SIZE = 8
+# 1 - це стіни, 2 - це звичайні кульки, 3 - це покращені кульки. покращені дають додаткові очки і можливість стопнути привида
+# мабуть є кращій спосіб малювати лабіринт, але так наглядно видно, що буде, як гра запуститься
 INITIAL_MAZE = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 2, 2, 2, 2, 1],
@@ -25,15 +27,22 @@ INITIAL_MAZE = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
 MAZE = [row[:] for row in INITIAL_MAZE]
+# чим менше значення швидкості - тим швидший рух
 SPEED = 5
+# час на скільки стопаються привиди
 GHOST_STOP_TIME = 100
-PACMAN_COLOR = 10
-WALL_COLOR = 1
-PELLET_COLOR = 7
-GHOST_COLOR = 8
-EMPTY_COLOR = 0
 SCREEN_WIDTH = len(MAZE[0]) * TILE_SIZE
 SCREEN_HEIGHT = len(MAZE) * TILE_SIZE
+# всі кольори є тут - https://github.com/kitao/pyxel/blob/main/docs/images/05_color_palette.png
+COLORS = {
+    "pacman": 10,
+    "wall": 1,
+    "pellet": 7,
+    "ghost": 8,
+    "empty": 0,
+    "win": 9,
+    "lose": 3,
+}
 
 class PacMan:
     def __init__(self, x, y):
@@ -123,37 +132,37 @@ class PacMan:
             if self.power_timer <= 0:
                 self.powered_up = False
 
-
     def draw(self):
-        pyxel.circ(self.x, self.y, TILE_SIZE // 2, PACMAN_COLOR)
+        pyxel.circ(self.x, self.y, TILE_SIZE // 2, COLORS["pacman"])
 
+        # це типу емуляція рота пакмана
         if self.direction == "UP":
             pyxel.tri(
                 self.x, self.y,
                 self.x - TILE_SIZE // 4, self.y - TILE_SIZE // 2,
                 self.x + TILE_SIZE // 4, self.y - TILE_SIZE // 2,
-                EMPTY_COLOR
+                COLORS["empty"]
             )
         elif self.direction == "DOWN":
             pyxel.tri(
                 self.x, self.y,
                 self.x - TILE_SIZE // 4, self.y + TILE_SIZE // 2,
                 self.x + TILE_SIZE // 4, self.y + TILE_SIZE // 2,
-                EMPTY_COLOR
+                COLORS["empty"]
             )
         elif self.direction == "LEFT":
             pyxel.tri(
                 self.x, self.y,
                 self.x - TILE_SIZE // 2, self.y - TILE_SIZE // 4,
                 self.x - TILE_SIZE // 2, self.y + TILE_SIZE // 4,
-                EMPTY_COLOR
+                COLORS["empty"]
             )
         elif self.direction == "RIGHT":
             pyxel.tri(
                 self.x, self.y,
                 self.x + TILE_SIZE // 2, self.y - TILE_SIZE // 4,
                 self.x + TILE_SIZE // 2, self.y + TILE_SIZE // 4,
-                EMPTY_COLOR
+                COLORS["empty"]
             )
 
 class Ghost:
@@ -198,7 +207,8 @@ class Ghost:
             self.x, self.y = new_x, new_y
 
     def draw(self, pacman):
-        ghost_color = GHOST_COLOR
+        # в залежності від того чи привид у звичайному стані, стоїть чи коли пакман підсилений - у привида різні кольори
+        ghost_color = COLORS["ghost"]
         if self.waiting:
             ghost_color = 13
         elif pacman.powered_up:
@@ -207,8 +217,8 @@ class Ghost:
         pyxel.circ(self.x, self.y, TILE_SIZE // 2, ghost_color)
         eye_offset = TILE_SIZE // 4
 
-        pyxel.pset(self.x - eye_offset, self.y - eye_offset, 0)
-        pyxel.pset(self.x + eye_offset, self.y - eye_offset, 0)
+        pyxel.pset(self.x - eye_offset, self.y - eye_offset, COLORS["empty"])
+        pyxel.pset(self.x + eye_offset, self.y - eye_offset, COLORS["empty"])
 
 class Game:
     def __init__(self):
@@ -244,6 +254,7 @@ class Game:
         if self.pacman.total_pellets < 1:
             self.win = True
 
+        # при виграші чи програші настискання на пробіл перезапускає гру
         if self.game_over or self.win:
             if pyxel.btnp(pyxel.KEY_SPACE):
                 self.reset_game()
@@ -262,9 +273,21 @@ class Game:
         for ghost in self.ghosts:
             ghost.update(self.pacman)
 
+    def draw_maze(self):
+        for y, row in enumerate(MAZE):
+            for x, cell in enumerate(row):
+                tile_x = x * TILE_SIZE
+                tile_y = y * TILE_SIZE
+                if cell == 1:
+                    pyxel.rect(tile_x, tile_y, TILE_SIZE, TILE_SIZE, COLORS["wall"])
+                elif cell == 2:
+                    pyxel.pset(tile_x + TILE_SIZE // 2, tile_y + TILE_SIZE // 2, COLORS["pellet"])
+                elif cell == 3:
+                    pyxel.circ(tile_x + TILE_SIZE // 2, tile_y + TILE_SIZE // 2, 2, COLORS["pellet"])
+
     def draw(self):
         if self.game_over:
-            pyxel.cls(3)
+            pyxel.cls(COLORS["lose"])
             game_over_text = "GAME OVER"
             restart_text = "PRESS <<SPACE>> TO RESTART"
             pyxel.text((SCREEN_WIDTH - len(game_over_text) * 4) // 2, (SCREEN_HEIGHT - 6) // 2, game_over_text, 7)
@@ -272,26 +295,16 @@ class Game:
             return
 
         if self.win:
-            pyxel.cls(9)
+            pyxel.cls(COLORS["win"])
             game_over_text = "YOU WON"
             restart_text = "PRESS <<SPACE>> TO RESTART"
             pyxel.text((SCREEN_WIDTH - len(game_over_text) * 4) // 2, (SCREEN_HEIGHT - 6) // 2, game_over_text, 7)
             pyxel.text((SCREEN_WIDTH - len(restart_text) * 4) // 2, (SCREEN_HEIGHT + 12) // 2, restart_text, 7)
             return
 
-        pyxel.cls(EMPTY_COLOR)
+        pyxel.cls(COLORS["empty"])
 
-        for y, row in enumerate(MAZE):
-            for x, cell in enumerate(row):
-                tile_x = x * TILE_SIZE
-                tile_y = y * TILE_SIZE
-                if cell == 1:
-                    pyxel.rect(tile_x, tile_y, TILE_SIZE, TILE_SIZE, WALL_COLOR)
-                elif cell == 2:
-                    pyxel.pset(tile_x + TILE_SIZE // 2, tile_y + TILE_SIZE // 2, PELLET_COLOR)
-                elif cell == 3:
-                    pyxel.circ(tile_x + TILE_SIZE // 2, tile_y + TILE_SIZE // 2, 2, PELLET_COLOR)
-
+        self.draw_maze()
         self.pacman.draw()
         for ghost in self.ghosts:
             ghost.draw(self.pacman)
